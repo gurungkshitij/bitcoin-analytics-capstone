@@ -1,6 +1,6 @@
 # Bitcoin DCA Backtest System
 
-This document explains the backtesting framework in `template/backtest_template.py` and how to interpret its results for evaluating the dynamic DCA weight computation model.
+This document explains the backtesting framework in `example_1/backtest_example_1.py` and how to interpret its results for evaluating the dynamic DCA weight computation model with Polymarket integration.
 
 ## Overview
 
@@ -84,6 +84,7 @@ Features include:
 - `mvrv_acceleration`: Momentum indicator
 - `mvrv_volatility`: Uncertainty measure
 - `signal_confidence`: Signal agreement score
+- `polymarket_sentiment`: BTC prediction market sentiment (normalized [0, 1])
 
 ### Rolling Window Backtest
 
@@ -123,12 +124,13 @@ percentile = (spd - min_spd) / (max_spd - min_spd) × 100
 ### Sample Backtest Output
 
 ```
-2025-12-29 15:54:21 INFO     Backtesting date range: 2018-01-01 to 2025-12-28 (2554 total windows)
-2025-12-29 15:54:25 INFO     ✓ Validated weight sums for 2554 windows (all sum to 1.0)
-2025-12-29 15:54:25 INFO     Aggregated Metrics for Dynamic DCA:
-2025-12-29 15:54:25 INFO       SPD: min=1084.79, max=22722.45, mean=7085.31, median=3300.38
-2025-12-29 15:54:25 INFO       Percentile: min=4.40%, max=85.66%, mean=42.77%, median=45.26%
-2025-12-29 15:54:25 INFO       Exp-decay avg SPD percentile: 56.21%
+2026-01-19 10:57:31 INFO     Running SPD backtest...
+2026-01-19 10:57:31 INFO     Backtesting date range: 2018-01-01 to 2026-01-14 (2571 total windows)
+2026-01-19 10:57:35 INFO     ✓ Validated weight sums for 2571 windows (all sum to 1.0)
+2026-01-19 10:57:35 INFO     Aggregated Metrics for Dynamic DCA:
+2026-01-19 10:57:35 INFO       SPD: min=1072.64, max=27363.68, mean=7505.93, median=3276.08
+2026-01-19 10:57:35 INFO       Percentile: min=1.48%, max=87.43%, mean=44.48%, median=43.69%
+2026-01-19 10:57:35 INFO       Exp-decay avg SPD percentile: 58.46%
 ```
 
 | Metric | Value | Interpretation |
@@ -146,7 +148,7 @@ percentile = (spd - min_spd) / (max_spd - min_spd) × 100
 ### Strategy Validation Output
 
 ```
-Summary: 908/2554 underperformed (64.45% win rate)
+Summary: 1015/2571 underperformed (60.52% win rate)
 ✅ Strategy meets performance requirement (≥ 50% win rate vs. uniform DCA).
 ✅ Strategy is ready for submission.
 ```
@@ -161,10 +163,10 @@ Summary: 908/2554 underperformed (64.45% win rate)
 ### Final Model Score
 
 ```
-2025-12-29 15:54:38 INFO     Final Model Score: 60.33%
-2025-12-29 15:54:38 INFO       Excess percentile: mean=4.07%, median=4.41%
-2025-12-29 15:54:38 INFO       Relative improvement: mean=11.44%, median=10.76%
-2025-12-29 15:54:38 INFO       Ratio (dynamic/uniform): mean=1.11, median=1.11
+2026-01-19 10:57:48 INFO     Final Model Score: 59.49%
+2026-01-19 10:57:48 INFO       Excess percentile: mean=5.77%, median=6.71%
+2026-01-19 10:57:48 INFO       Relative improvement: mean=17.00%, median=18.79%
+2026-01-19 10:57:48 INFO       Ratio (dynamic/uniform): mean=1.17, median=1.19
 ```
 
 | Metric | Value | Formula |
@@ -247,7 +249,7 @@ Run the backtest from the command line:
 ```bash
 cd /path/to/bitcoin_modal
 source venv/bin/activate
-python -m template.backtest_template
+python -m example_1.backtest_example_1
 ```
 
 The script will:
@@ -298,13 +300,13 @@ Based on the current backtest results:
 
 | Metric | Current Value | Target |
 |--------|---------------|--------|
-| Win Rate | 64.45% | ≥ 50% |
-| Model Score | 60.33% | Higher is better |
-| Mean Excess | +4.07% | Positive |
-| Median Excess | +4.41% | Positive |
-| Exp-Decay Percentile | 56.21% | > 50% |
+| Win Rate | 60.52% | ≥ 50% |
+| Model Score | 59.49% | Higher is better |
+| Mean Excess | +5.77% | Positive |
+| Median Excess | +6.71% | Positive |
+| Exp-Decay Percentile | 58.46% | > 50% |
 
 The strategy consistently outperforms uniform DCA with:
-- **64.45% win rate** (1,646 wins / 908 losses)
-- **11% relative improvement** on average
-- **Stronger recent performance** (exp-decay average: 56.21%)
+- **60.52% win rate** (1,556 wins / 1,015 losses)
+- **17% relative improvement** on average
+- **Stronger recent performance** (exp-decay average: 58.46%)

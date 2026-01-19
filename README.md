@@ -73,13 +73,14 @@ Your task is to modify `template/model_development_template.py` to integrate Pol
 ├── template/                        # DIRECTORY TO FORK
 │   ├── model_development_template.py # INTEGRATE POLYMARKET SIGNALS HERE
 │   ├── backtest_template.py         # Evaluate your new strategy
-│   └── prelude_template.py          # Data loading utilities
+│   ├── model_template.md            # Detailed MVRV logic documentation
+│   └── backtest_template.md         # Backtest engine documentation
 ├── example_1/                       # REFERENCE IMPLEMENTATION
 │   ├── model_development_example_1.py# Example Polymarket integration
 │   ├── backtest_example_1.py        # Example backtest
-│   └── ...                          # See folder for full contents
+│   ├── model_example_1.md           # Documentation for updated logic
+│   └── backtest_example_1.md        # Documentation for Example 1 results
 ├── data/                            # Bitcoin & Polymarket source data
-├── docs/                            # Deep-dive documentation on MVRV logic
 ├── output/                          # Your strategy's performance visualizations
 └── tests/                           # Ensure your model remains stable
 ```

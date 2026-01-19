@@ -11,6 +11,7 @@ The model computes daily investment weights that determine how much of your DCA 
 3. **MVRV Momentum**: Acceleration/deceleration of MVRV trends
 4. **Signal Confidence**: Amplify signals when multiple indicators agree
 5. **Volatility Dampening**: Reduce exposure during high uncertainty periods
+6. **Polymarket Sentiment** *(Example 1 only)*: Market attention signal from BTC prediction markets
 
 **Key Properties:**
 - Weights sum to exactly 1.0 for each date range (within tolerance of 1e-6)
@@ -95,14 +96,15 @@ Where:
 
 ## Signal Composition
 
-The model combines two primary signals with modulation factors:
+The model combines three primary signals with modulation factors:
 
 ### Primary Signals (Weighted Combination)
 
 | Signal | Weight | Description |
 |--------|--------|-------------|
-| MVRV Value Signal | 80% | Low MVRV Z-score → buy more, with asymmetric extreme boost |
-| MA Signal | 20% | Below 200-day MA → buy more, with adaptive trend modulation |
+| MVRV Value Signal | 64% | Low MVRV Z-score → buy more, with asymmetric extreme boost |
+| MA Signal | 16% | Below 200-day MA → buy more, with adaptive trend modulation |
+| Polymarket Sentiment | 20% | High market activity → slight bullish modifier |
 
 ### Signal Modifiers
 
@@ -221,6 +223,53 @@ def compute_signal_confidence(mvrv_zscore, mvrv_gradient, price_vs_ma):
 
     return np.clip(confidence, 0, 1)
 ```
+
+### Polymarket Sentiment
+
+**Example 1 Integration**: This model includes a Polymarket sentiment signal derived from BTC-related prediction markets.
+
+#### Data Source
+
+Polymarket data includes thousands of BTC-related markets from 2020-2025, such as:
+- Price targets ("Will Bitcoin hit $100k in November?")
+- ETF approvals ("Will the SEC approve BlackRock's Bitcoin ETF?")
+- Strategic reserves ("Will Trump create Bitcoin reserve in first 100 days?")
+
+#### Sentiment Computation
+
+```python
+def load_polymarket_btc_sentiment() -> pd.DataFrame:
+    # 1. Filter to BTC-related markets (question contains "Bitcoin", "BTC", or "btc")
+    # 2. Aggregate by creation date:
+    #    - daily_market_count: number of new BTC markets created
+    #    - daily_volume: total volume of markets created that day
+    # 3. Compute rolling 30-day percentiles for both metrics
+    # 4. Combine into sentiment score: avg(market_count_pct, volume_pct)
+    # Result: sentiment in [0, 1] where 0.5 = neutral
+```
+
+**Interpretation:**
+- High sentiment (>0.5): Increased market creation activity → heightened market attention → slight bullish modifier
+- Low sentiment (<0.5): Decreased market activity → reduced attention → slight bearish modifier
+- Neutral (0.5): Average activity or no Polymarket data available
+
+#### Integration into Model
+
+The sentiment is integrated as a 20% weighted signal:
+
+```python
+# Normalize from [0, 1] to [-0.1, 0.1] for subtle effect
+polymarket_signal = (polymarket_sentiment - 0.5) * 0.2
+
+# Combine with other signals
+combined = value_signal * 0.64 + ma_signal * 0.16 + polymarket_signal * 0.20
+```
+
+**Design Rationale:**
+- **Moderate weight (20%)**: Provides meaningful influence while preserving MVRV/MA core
+- **Subtle range (±0.1)**: Prevents overreaction to prediction market noise
+- **Neutral fallback**: Uses 0.5 for dates before 2020 or when data unavailable
+- **1-day lag**: Sentiment is lagged like all other features to prevent look-ahead bias
 
 ### Look-Ahead Bias Prevention
 

@@ -51,6 +51,7 @@ FEATS = [
     "mvrv_zone",
     "mvrv_volatility",
     "signal_confidence",
+    "polymarket_sentiment",
 ]
 
 
@@ -214,6 +215,7 @@ def precompute_features(df: pd.DataFrame) -> pd.DataFrame:
     - mvrv_gradient: Smoothed MVRV trend direction in [-1, 1]
     - mvrv_acceleration: Second derivative of MVRV gradient (momentum)
     - mvrv_zone: Discrete zone classification [-2, -1, 0, 1, 2]
+    - polymarket_sentiment: Normalized sentiment from BTC market activity [0, 1]
 
     Args:
         df: DataFrame with price and MVRV columns
@@ -271,6 +273,21 @@ def precompute_features(df: pd.DataFrame) -> pd.DataFrame:
         mvrv_volatility = pd.Series(0.5, index=price.index)
         signal_confidence = pd.Series(0.5, index=price.index)
 
+    # Load Polymarket sentiment (if available)
+    try:
+        from example_1.prelude_example_1 import load_polymarket_btc_sentiment
+        polymarket_df = load_polymarket_btc_sentiment()
+        if not polymarket_df.empty:
+            # Merge with price index, fill missing dates with neutral (0.5)
+            polymarket_sentiment = polymarket_df["polymarket_sentiment"].reindex(
+                price.index, fill_value=0.5
+            )
+        else:
+            polymarket_sentiment = pd.Series(0.5, index=price.index)
+    except (ImportError, FileNotFoundError):
+        # If Polymarket data not available, use neutral sentiment
+        polymarket_sentiment = pd.Series(0.5, index=price.index)
+
     # Build and lag features
     features = pd.DataFrame(
         {
@@ -283,6 +300,7 @@ def precompute_features(df: pd.DataFrame) -> pd.DataFrame:
             "mvrv_zone": mvrv_zone,
             "mvrv_volatility": mvrv_volatility,
             "signal_confidence": signal_confidence,
+            "polymarket_sentiment": polymarket_sentiment,
         },
         index=price.index,
     )
@@ -295,12 +313,14 @@ def precompute_features(df: pd.DataFrame) -> pd.DataFrame:
         "mvrv_acceleration",
         "mvrv_zone",
         "mvrv_volatility",
+        "polymarket_sentiment",
     ]
     features[signal_cols] = features[signal_cols].shift(1)
 
     # Fill NaN values with appropriate defaults
     features["mvrv_zone"] = features["mvrv_zone"].fillna(0)
     features["mvrv_volatility"] = features["mvrv_volatility"].fillna(0.5)
+    features["polymarket_sentiment"] = features["polymarket_sentiment"].fillna(0.5)
     features = features.fillna(0)
 
     # Compute signal confidence using lagged values (no look-ahead)
@@ -529,12 +549,14 @@ def compute_dynamic_multiplier(
     mvrv_acceleration: np.ndarray | None = None,
     mvrv_volatility: np.ndarray | None = None,
     signal_confidence: np.ndarray | None = None,
+    polymarket_sentiment: np.ndarray | None = None,
 ) -> np.ndarray:
     """Compute weight multiplier from MVRV and MA signals.
 
     Enhanced strategy with multiple MVRV signals:
-    - Primary (80%): MVRV value signal with asymmetric extreme boost
-    - Secondary (20%): MA signal with adaptive trend modulation
+    - Primary (64%): MVRV value signal with asymmetric extreme boost
+    - Secondary (16%): MA signal with adaptive trend modulation
+    - Tertiary (20%): Polymarket sentiment modifier
 
     Modulated by:
     - Signal confidence: Amplify when signals agree
@@ -547,6 +569,7 @@ def compute_dynamic_multiplier(
         mvrv_acceleration: Optional MVRV acceleration [-1, 1]
         mvrv_volatility: Optional volatility percentile [0, 1]
         signal_confidence: Optional confidence score [0, 1]
+        polymarket_sentiment: Optional Polymarket sentiment [0, 1]
 
     Returns:
         Multipliers centered around 1.0
@@ -558,6 +581,8 @@ def compute_dynamic_multiplier(
         mvrv_volatility = np.full_like(mvrv_zscore, 0.5)
     if signal_confidence is None:
         signal_confidence = np.full_like(mvrv_zscore, 0.5)
+    if polymarket_sentiment is None:
+        polymarket_sentiment = np.full_like(mvrv_zscore, 0.5)
 
     # 1. MVRV value signal: low MVRV = buy more
     value_signal = -mvrv_zscore
@@ -574,10 +599,14 @@ def compute_dynamic_multiplier(
     # 4. Acceleration modifier: momentum detection
     accel_modifier = compute_acceleration_modifier(mvrv_acceleration, mvrv_gradient)
 
+    # 5. Polymarket sentiment signal: high sentiment = slight bullish modifier
+    # Normalize from [0, 1] to [-0.1, 0.1] for subtle effect
+    polymarket_signal = (polymarket_sentiment - 0.5) * 0.2  # Range: [-0.1, 0.1]
+
     # Combine signals with weights
-    # Primary: MVRV value (80%), Secondary: MA (20%)
+    # Primary: MVRV value (64%), Secondary: MA (16%), Tertiary: Polymarket (20%)
     # Focus on core MVRV signal with asymmetric boost
-    combined = value_signal * 0.80 + ma_signal * 0.20
+    combined = value_signal * 0.64 + ma_signal * 0.16 + polymarket_signal * 0.20
 
     # Apply acceleration modifier (subtle: range [0.85, 1.15])
     accel_modifier_subtle = 0.85 + 0.30 * (accel_modifier - 0.5) / 0.5
@@ -669,6 +698,12 @@ def compute_weights_fast(
     else:
         signal_confidence = None
 
+    if "polymarket_sentiment" in df.columns:
+        polymarket_sentiment = _clean_array(df["polymarket_sentiment"].values)
+        polymarket_sentiment = np.where(polymarket_sentiment == 0, 0.5, polymarket_sentiment)
+    else:
+        polymarket_sentiment = None
+
     # Compute dynamic weights with enhanced features
     dyn = compute_dynamic_multiplier(
         price_vs_ma,
@@ -677,6 +712,7 @@ def compute_weights_fast(
         mvrv_acceleration,
         mvrv_volatility,
         signal_confidence,
+        polymarket_sentiment,
     )
     raw = base * dyn
 

@@ -10,16 +10,16 @@ import pandas as pd
 import seaborn as sns
 
 try:
-    from template.model_development_template import compute_window_weights, precompute_features
-    from template.prelude_template import (
+    from example_1.model_development_example_1 import compute_window_weights, precompute_features
+    from example_1.prelude_example_1 import (
         backtest_dynamic_dca,
         check_strategy_submission_ready,
         load_data,
         parse_window_dates,
     )
 except ImportError:
-    from model_development_template import compute_window_weights, precompute_features
-    from prelude_template import (
+    from model_development_example_1 import compute_window_weights, precompute_features
+    from prelude_example_1 import (
         backtest_dynamic_dca,
         check_strategy_submission_ready,
         load_data,

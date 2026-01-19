@@ -92,6 +92,89 @@ def load_data():
     return df
 
 
+def load_polymarket_btc_sentiment() -> pd.DataFrame:
+    """Load Polymarket BTC-related markets and compute daily sentiment.
+    
+    Aggregates BTC-related prediction markets by creation date to compute:
+    - daily_market_count: number of new BTC markets created each day
+    - daily_volume: total volume of BTC markets created each day
+    - polymarket_sentiment: normalized sentiment score [0, 1]
+    
+    Returns:
+        DataFrame indexed by date with sentiment features.
+        Returns empty DataFrame if Polymarket data not found.
+    """
+    base_dir = Path(__file__).parent.parent
+    polymarket_path = base_dir / "data" / "Polymarket" / "finance_politics_markets.parquet"
+    
+    # Fallback to CWD relative
+    if not polymarket_path.exists():
+        polymarket_path = Path("data/Polymarket/finance_politics_markets.parquet")
+    
+    if not polymarket_path.exists():
+        logging.warning(
+            f"Polymarket data not found at {polymarket_path}. "
+            "Polymarket sentiment will be neutral (0.0) for all dates."
+        )
+        return pd.DataFrame()
+    
+    logging.info(f"Loading Polymarket data from: {polymarket_path}")
+    markets_df = pd.read_parquet(polymarket_path)
+    
+    # Filter to BTC-related markets
+    btc_markets = markets_df[
+        markets_df["question"].str.contains("Bitcoin|BTC|btc", case=False, na=False)
+    ].copy()
+    
+    logging.info(f"Found {len(btc_markets)} BTC-related markets in Polymarket data")
+    
+    if btc_markets.empty:
+        logging.warning("No BTC-related markets found in Polymarket data")
+        return pd.DataFrame()
+    
+    # Extract creation date (normalize to date only)
+    btc_markets["created_date"] = pd.to_datetime(btc_markets["created_at"]).dt.normalize()
+    
+    # Aggregate by creation date
+    daily_stats = btc_markets.groupby("created_date").agg(
+        daily_market_count=("market_id", "count"),
+        daily_volume=("volume", "sum")
+    ).reset_index()
+    
+    # Compute normalized sentiment score
+    # High market creation activity = high sentiment
+    # Use rolling 30-day percentile to normalize
+    daily_stats = daily_stats.set_index("created_date").sort_index()
+    
+    # Compute rolling percentiles (30-day window)
+    daily_stats["market_count_pct"] = (
+        daily_stats["daily_market_count"]
+        .rolling(30, min_periods=1)
+        .apply(lambda x: (x.iloc[-1] > x[:-1]).sum() / max(len(x) - 1, 1) if len(x) > 1 else 0.5)
+    )
+    
+    daily_stats["volume_pct"] = (
+        daily_stats["daily_volume"]
+        .rolling(30, min_periods=1)
+        .apply(lambda x: (x.iloc[-1] > x[:-1]).sum() / max(len(x) - 1, 1) if len(x) > 1 else 0.5)
+    )
+    
+    # Combine into single sentiment score (average of percentiles)
+    daily_stats["polymarket_sentiment"] = (
+        daily_stats["market_count_pct"] * 0.5 + daily_stats["volume_pct"] * 0.5
+    )
+    
+    # Fill NaN with neutral (0.5)
+    daily_stats["polymarket_sentiment"] = daily_stats["polymarket_sentiment"].fillna(0.5)
+    
+    logging.info(
+        f"Polymarket sentiment computed: {len(daily_stats)} days, "
+        f"{daily_stats.index.min().date()} to {daily_stats.index.max().date()}"
+    )
+    
+    return daily_stats[["polymarket_sentiment"]]
+
+
 def _make_window_label(start: pd.Timestamp, end: pd.Timestamp) -> str:
     """Format rolling window label as 'YYYY-MM-DD → YYYY-MM-DD'."""
     return f"{start.strftime('%Y-%m-%d')} → {end.strftime('%Y-%m-%d')}"
