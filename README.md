@@ -3,6 +3,7 @@
 Building and improving data-driven Bitcoin accumulation strategies, with a focus on utilizing signal from predicion market data. 
 
 See [stackingsats.org](https://www.stackingsats.org/) for more information.
+
 Kshitij Gurung: To get started on my work, go to kshitij_model folder and read the Bitcoin_Final.ipynb. 
 * Bitcoin_Final.ipynb: Walkthrough of the Overivew, EDA, Model building, and interpretation
 * Final_model.py: The final model with best result
